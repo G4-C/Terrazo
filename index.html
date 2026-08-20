@@ -5,23 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Terrazo di Dante — Portal de Moradores</title>
   <style>
-    * { margin: 0; padding: 0; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { height: 100%; overflow: hidden; background: #F0F2F8; }
-    iframe {
-      width: 100%;
-      height: 100vh;
-      height: 100dvh;
-      border: none;
-      display: block;
-    }
+    iframe { width: 100%; height: 100vh; height: 100dvh; border: none; display: block; }
     .loading {
       position: fixed; inset: 0;
       display: flex; flex-direction: column;
       align-items: center; justify-content: center;
       gap: 16px; color: #5A5A7A;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      z-index: 10;
-      background: #F0F2F8;
+      z-index: 10; background: #F0F2F8;
       transition: opacity .3s;
     }
     .loading.hidden { opacity: 0; pointer-events: none; }
@@ -43,8 +36,19 @@
     var APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyY6ePkEm6NBU3jL9m7HTBz6tCNkMmEBB3zJuPXGry5rd8gEdY4lAWyXlH4XLqHSOXp/exec";
 
     var params = window.location.search;
+    var session = localStorage.getItem("terrazo_session") || "";
+
+    var iframeSrc;
+    if (params && params.indexOf("action=auth") >= 0) {
+      iframeSrc = APPS_SCRIPT_URL + params;
+    } else if (session) {
+      iframeSrc = APPS_SCRIPT_URL + "?session=" + encodeURIComponent(session);
+    } else {
+      iframeSrc = APPS_SCRIPT_URL;
+    }
+
     var iframe = document.createElement("iframe");
-    iframe.src = APPS_SCRIPT_URL + params;
+    iframe.src = iframeSrc;
     iframe.allow = "clipboard-write";
     iframe.onload = function() {
       document.getElementById("loading").classList.add("hidden");
@@ -54,6 +58,19 @@
     if (params) {
       history.replaceState(null, "", window.location.pathname);
     }
+
+    window.addEventListener("message", function(e) {
+      try {
+        var data = e.data;
+        if (!data || typeof data !== "object") return;
+        if (data.type === "terrazo_session" && data.token) {
+          localStorage.setItem("terrazo_session", data.token);
+        }
+        if (data.type === "terrazo_logout") {
+          localStorage.removeItem("terrazo_session");
+        }
+      } catch(err) {}
+    });
   </script>
 </body>
 </html>

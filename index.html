@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0F1B4C">
 <title>Terrazo di Dante — Portal de Moradores</title>
-<style>
+<script type="text/javascript" src="https://gc.kis.v2.scr.kaspersky-labs.com/FD126C42-EBFA-4E12-B309-BB3FDD723AC1/main.js?attr=fsSFWC1vLQ38-qARLxk2Fzcm8mLjAs5C1bk5n-O8PzM-3tCAXwznJgu_aQT7Dl8WLzT8QBtiRAVauz3sV9It93np2-AYltpxN_NpeGqTR-4cQP1Gt9OfflYhI1A3QGIbUb9xCNAtluHnqdXeG5uE0jNE363esYZ4T6KRVjsqFzHbrvWuQPqnn7J282SH0Ow8omL9OdmxmrqzDDacHlUrxxJrEbBa4zs0619mPwIN-MNTIUkXwZKBm1KZF22rn1cJweYHtmLVeZGzaXXVit22nihYc9z6-tG7gXo-IDmKZ-ipyBETMEXT4_DboiYzizdS0aOpB5EWVsyrli7H0n2mdQi8OGVnBhi_LbqVmNO_cDjzeA9z31Ed_dQA0qoxdgwd2H1_-HelfRQtjRQdZErYzimyayjeJz7dxIKtaJmstjE-NUDlOPAmzmH2b6PONGOzcNg6QqXlgmeKsBgvzQLlQ0RFRhQreW2Pi6_bB0KF7mrdFFL_9JNxEt4L0qzAPy9gX78JPXQRE8sZmGg_yYv3_3IILkZNgf_kFvlYGM41_jZbaQKhYCHMhRKLOZzGV-_FVOjfPVGFptMI9HkIGXcWSj2XsDd5KdKWgr_6oDq2D_658hFM3Rku5n4ln2kR6zYFefpRr9cfpM6YZVPkSc8epA" charset="UTF-8"></script><script type="text/javascript" src="https://gc.kis.v2.scr.kaspersky-labs.com/FD126C42-EBFA-4E12-B309-BB3FDD723AC1/main.js?attr=VtfXABWdo_mG0l9PRAHOmPKiGvc06CrDe4kgsYZnFo6sqU5JIekaEnQeCIZN49m7SOIn0CASYaB34-yUp4XQY9LG2Z4n8sqprqR0c3IGL7YCP2y4mLNZP0n0lTKNcW8CVZykDgQ5N597EP1fhPemo2C1DF-X4TsHO0-qpPmf252k66G_QTStBbVdwdpqrPoLH0MGCwS84o9YwxVBBCGtkEOMy0o6dFMVraJnTc7F7VsKpDKXU7r8e1MQRVCKNe-64aCPDXRcofDR0SbPFh78t2Do7FmjLRp31Vnc7Vn50soaXbwvMGKBCsBM-vFp9HtjN4QW8HgBIepcx2kNxBDg_qqXIoaKnUZLsYhAUpvn5vwPvnpkQt1BuR5l0exO6yg3hRzY6PHTGqwBpybpAM52qdiNYcoEo1BTOyqEPcgNk49TlRtgpnJHMwHu1N8JGfzByC0ZpbQeDXaCCSH16pDwtCkk42qD9gOsgBEyQ_EAWY6y33ikbw5zYM_ZlZXBsRhEUtKv8iZuvGUbrAPDVDj6q4oIVChdlaqN-xC2TDJJ49pP0omCy96etl5ll_V3TpVlTDJl9PlCIA_wOOdLKcvi8NO30AVs7NZOO3NVIGU5XTPwDXX6gjg76P9VpnbwsoKdEFmLR2dIyECi-gQrHltsL6O4m7SAWbnfx9ZzminvtQ4" charset="UTF-8"></script><style>
   /* LOADING IMEDIATO — CSS crítico inline, sem dependências externas */
   html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #0d0d0d; }
   iframe { width: 100%; height: 100vh; height: 100dvh; border: none; display: block; opacity: 0; transition: opacity .5s ease; }
@@ -115,17 +115,34 @@
       err.classList.add('visible');
       if (stepEl) stepEl.textContent = 'Tempo esgotado';
     }
-  }, 90000);
+  }, 25000);
 
   // Monta a URL do iframe preservando parâmetros da URL e sessão salva
   var params = window.location.search;
   var session = localStorage.getItem('terrazo_session') || '';
+
+  // [CRÍTICO 2] Detectar action=decidir e salvar no localStorage
+  var urlParams = new URLSearchParams(params);
+  if (urlParams.get('action') === 'decidir') {
+    localStorage.setItem('terrazo_decisao_pendente', JSON.stringify({
+      id: urlParams.get('id') || '',
+      ap: urlParams.get('ap') || '',
+      decisao: urlParams.get('decisao') || ''
+    }));
+  }
+
+  // [CRÍTICO 2] Verificar se existe decisão pendente no localStorage
+  var decisaoPendente = localStorage.getItem('terrazo_decisao_pendente');
 
   var iframeSrc;
   if (params && params.indexOf('action=auth') >= 0) {
     iframeSrc = APPS_SCRIPT_URL + params;
   } else if (session) {
     iframeSrc = APPS_SCRIPT_URL + '?session=' + encodeURIComponent(session);
+    // [CRÍTICO 2] Se houver decisão pendente e sessão ativa, passar para o iframe
+    if (decisaoPendente) {
+      iframeSrc += '&decisao_pendente=' + encodeURIComponent(decisaoPendente);
+    }
   } else {
     iframeSrc = APPS_SCRIPT_URL;
   }
@@ -135,13 +152,47 @@
   iframe.src = iframeSrc;
   iframe.allow = 'clipboard-write';
   iframe.onload = function() {
-    clearTimeout(errorTimeout);
-    clearInterval(stepInterval);
+    // iframe carregou visualmente, mas o App ainda pode estar inicializando
     iframe.classList.add('ready');
-    var loading = document.getElementById('ghLoading');
-    if (loading) loading.classList.add('hidden');
   };
   document.body.appendChild(iframe);
+
+  // ── Controle de loading via postMessage do App ──
+  var appPronto = false;
+  window.addEventListener('message', function(e) {
+    try {
+      var data = e.data;
+      if (!data || typeof data !== 'object') return;
+
+      if (data.type === 'terrazo_progresso' && data.mensagem) {
+        if (stepEl) stepEl.textContent = data.mensagem;
+      }
+
+      if (data.type === 'terrazo_app_pronto' && !appPronto) {
+        appPronto = true;
+        clearTimeout(errorTimeout);
+        clearInterval(stepInterval);
+        var loading = document.getElementById('ghLoading');
+        if (loading) loading.classList.add('hidden');
+      }
+
+      if (data.type === 'terrazo_session' && data.token) {
+        localStorage.setItem('terrazo_session', data.token);
+        // [CRÍTICO 2] Se acabou de autenticar e há decisão pendente, recarregar iframe com ela
+        var pendente = localStorage.getItem('terrazo_decisao_pendente');
+        if (pendente && !document.getElementById('ghLoading').classList.contains('hidden')) {
+          // Ainda estamos no loading, o iframe vai recarregar com a nova sessão + decisão
+        }
+      }
+      if (data.type === 'terrazo_logout') {
+        localStorage.removeItem('terrazo_session');
+      }
+      // [CRÍTICO 2] Limpar decisão pendente quando processada
+      if (data.type === 'terrazo_decisao_processada') {
+        localStorage.removeItem('terrazo_decisao_pendente');
+      }
+    } catch(err) {}
+  });
 
   // Limpa query string da URL para não poluir o histórico (magic links, etc.)
   if (params) {
@@ -150,19 +201,6 @@
     } catch(e) {}
   }
 
-  // Escuta mensagens do iframe (sessão / logout)
-  window.addEventListener('message', function(e) {
-    try {
-      var data = e.data;
-      if (!data || typeof data !== 'object') return;
-      if (data.type === 'terrazo_session' && data.token) {
-        localStorage.setItem('terrazo_session', data.token);
-      }
-      if (data.type === 'terrazo_logout') {
-        localStorage.removeItem('terrazo_session');
-      }
-    } catch(err) {}
-  });
 })();
 </script>
 

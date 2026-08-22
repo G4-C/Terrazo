@@ -58,6 +58,10 @@
     100% { width: 0%; margin-left: 100%; opacity: 0; }
   }
   .gh-step { font-size: 13px; color: #5a5a7a; min-height: 20px; text-align: center; }
+  .gh-elapsed {
+    font-size: 11px; color: #3f3f5a; margin: 10px 0 0; text-align: center;
+    font-variant-numeric: tabular-nums; letter-spacing: 0.06em;
+  }
   .gh-hint { font-size: 12px; color: #525252; text-align: center; margin-top: 16px; line-height: 1.5; max-width: 260px; }
 </style>
 <base target="_blank">
@@ -70,8 +74,9 @@
   <p class="gh-subtitle">Portal de Moradores</p>
   <div class="gh-spinner"></div>
   <div class="gh-progress"><div class="gh-progress-bar"></div></div>
-  <p class="gh-step" id="ghStep">Conectando...</p>
-  <p class="gh-hint">Na primeira vez pode levar alguns segundos.<br>Depois fica instantâneo.</p>
+  <p class="gh-step" id="ghStep">Conectando ao servidor...</p>
+  <p class="gh-elapsed" id="ghElapsed">0s</p>
+  <p class="gh-hint" id="ghHint">Na primeira vez pode levar alguns segundos.<br>Depois fica instantâneo.</p>
 </div>
 
 <script>
@@ -99,7 +104,19 @@
       clearInterval(stepInterval);
       if (stepEl) stepEl.textContent = 'Aguarde, estamos quase lá...';
     }
-  }, 4000);
+  }, 2500);
+
+  // Cronômetro honesto: mostra o tempo real decorrido, sem inventar progresso.
+  var t0 = Date.now();
+  var elapsedEl = document.getElementById('ghElapsed');
+  var hintEl = document.getElementById('ghHint');
+  var tickInterval = setInterval(function() {
+    var s = Math.round((Date.now() - t0) / 1000);
+    if (elapsedEl) elapsedEl.textContent = s + 's';
+    if (s === 15 && hintEl) {
+      hintEl.innerHTML = 'O servidor do Google está iniciando.<br>No primeiro acesso do dia isso demora mais.';
+    }
+  }, 1000);
 
   // Monta a URL do iframe
   var params = window.location.search;
@@ -137,20 +154,30 @@
   };
   document.body.appendChild(iframe);
 
-  // Fallback: se o app não sinalizar em 90s, esconde o loading
-  var fallbackTimeout = setTimeout(function() {
-    if (!appPronto) {
-      var loading = document.getElementById('ghLoading');
-      if (loading && !loading.classList.contains('hidden')) {
-        loading.classList.add('hidden');
-      }
-    }
-  }, 90000);
-
   // Controle de loading via postMessage do App
   var appPronto = false;
+
+  function esconderLoading() {
+    clearInterval(stepInterval);
+    clearInterval(tickInterval);
+    var loading = document.getElementById('ghLoading');
+    if (loading) loading.classList.add('hidden');
+  }
+
+  // Rede de segurança: se o app não sinalizar em 30s, revela o iframe mesmo assim.
+  // Não é o caminho normal — com o postMessage correto o sinal chega em poucos segundos.
+  var fallbackTimeout = setTimeout(function() {
+    if (!appPronto) esconderLoading();
+  }, 30000);
+
+  // Só aceita mensagens vindas do Apps Script (a casca e o iframe sandbox).
+  function origemConfiavel(o) {
+    return o === 'https://script.google.com' || /\.googleusercontent\.com$/.test(o || '');
+  }
+
   window.addEventListener('message', function(e) {
     try {
+      if (!origemConfiavel(e.origin)) return;
       var data = e.data;
       if (!data || typeof data !== 'object') return;
 
@@ -160,10 +187,8 @@
 
       if (data.type === 'terrazo_app_pronto' && !appPronto) {
         appPronto = true;
-        clearInterval(stepInterval);
         clearTimeout(fallbackTimeout);
-        var loading = document.getElementById('ghLoading');
-        if (loading) loading.classList.add('hidden');
+        esconderLoading();
       }
 
       if (data.type === 'terrazo_session' && data.token) {

@@ -137,6 +137,16 @@
   };
   document.body.appendChild(iframe);
 
+  // Fallback: se o app não sinalizar em 90s, esconde o loading
+  var fallbackTimeout = setTimeout(function() {
+    if (!appPronto) {
+      var loading = document.getElementById('ghLoading');
+      if (loading && !loading.classList.contains('hidden')) {
+        loading.classList.add('hidden');
+      }
+    }
+  }, 90000);
+
   // Controle de loading via postMessage do App
   var appPronto = false;
   window.addEventListener('message', function(e) {
@@ -151,6 +161,7 @@
       if (data.type === 'terrazo_app_pronto' && !appPronto) {
         appPronto = true;
         clearInterval(stepInterval);
+        clearTimeout(fallbackTimeout);
         var loading = document.getElementById('ghLoading');
         if (loading) loading.classList.add('hidden');
       }
